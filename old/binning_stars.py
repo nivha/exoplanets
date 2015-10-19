@@ -18,7 +18,7 @@ stars = stars[stars.Age.notnull()]
 stars = stars[stars.Teff.notnull()]
 
 
-stars = stars[stars.Age < 4000]
+# stars = stars[stars.Age < 4000]
 
 pl_stars = stars[stars.nasa_pl_freq.notnull()]
 npl_stars = stars[stars.nasa_pl_freq.isnull()]
@@ -61,8 +61,8 @@ stars['age_bins'] = digitize(stars.Age, bins=age_qbins)
 #         Planets frequency (host stars vs non-host stars)                    #
 ###############################################################################
 
-hosts_table = pl_stars.pivot_table(index='age_bins', columns='teff_bins', values='nasa_pl_freq', margins=True, aggfunc=len)
-all_table = stars.pivot_table(index='age_bins', columns='teff_bins', values='nasa_pl_freq', margins=True, aggfunc=len)
+hosts_table = pl_stars.pivot_table(index='age_bins', columns='teff_bins', values='nasa_pl_freq', aggfunc=len)
+all_table = stars.pivot_table(index='age_bins', columns='teff_bins', values='nasa_pl_freq', aggfunc=len)
 host_frequency_table = hosts_table / all_table
 
 
@@ -71,24 +71,16 @@ def rename_labels(df, index_labels, columns_labels):
     df = df.rename(columns=dict(enumerate(columns_labels, 1)))
     return df
 
-print rename_labels(hosts_table, age_categories.levels, teff_categories.levels)
-print
-print rename_labels(all_table, age_categories.levels, teff_categories.levels)
-print
-print rename_labels(host_frequency_table, age_categories.levels, teff_categories.levels)
+hosts_table = rename_labels(hosts_table, age_categories.levels, teff_categories.levels)
+all_table = rename_labels(all_table, age_categories.levels, teff_categories.levels)
+host_frequency_table = rename_labels(host_frequency_table, age_categories.levels, teff_categories.levels)
+
+
+
+
+
 
 #c.drop(5).drop(5,1).T.plot(kind='bar')
-
-
-
-
-
-
-
-
-
-
-
 
 
 ##### With Crosstab

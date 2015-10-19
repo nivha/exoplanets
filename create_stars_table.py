@@ -13,12 +13,15 @@ BASE_DIR = r"D:\Users\Mojo\Google Drive\project - astrophysics\raw_data"
 ###############################################################################
 
 # read 34030 stars without planets
+# source: http://adsabs.harvard.edu/abs/2014yCat..22110024M
 stars_without_planets_34030_path = os.path.join(BASE_DIR, "stars_without_planets_34030.csv")
 stars_without_planets_34030 = pd.read_csv(stars_without_planets_34030_path, skiprows=[1, 2])
 stars = stars_without_planets_34030[['KIC', 'Teff', 'Mass', 'Prot', 'e_Prot']]
 stars.rename(columns={'e_Prot': 'Prot_e'}, inplace=True)
 stars.set_index('KIC', inplace=True)
 # read 933 KOI with planets number per star
+# source: http://iopscience.iop.org/0004-637X/801/1/3/article#apj507604s2
+# source (data table): http://iopscience.iop.org/0004-637X/801/1/3/suppdata/apj507604t1_mrt.txt
 stars_933_with_planets_num_path = os.path.join(BASE_DIR, "KOI_993_periodic_pl.xlsx")
 stars_933_with_planets_num = pd.read_excel(stars_933_with_planets_num_path)
 df = stars_933_with_planets_num[['koi_id', 'keplerid', 'teff', 'period', 'period_err', 'pl_rad', 'pl_per', 'pl_num']]
@@ -36,12 +39,34 @@ stars = stars.combine_first(df)
 #                   Planets Table                                             #
 ###############################################################################
 
-#################
-# NASA
-#################
+##################################
+# NASA Exoplanet archive
+##################################
+# read 8828 KOI
+# source: http://exoplanetarchive.ipac.caltech.edu/cgi-bin/TblView/nph-tblView?app=ExoTbls&config=cumulative
 planets_8828_nasa_all_kois_path = os.path.join(BASE_DIR, "planets_nasa_all_kois_8826.xlsx")
 planets_8828_nasa_all_kois = pd.read_excel(planets_8828_nasa_all_kois_path, skiprows=range(155))
-planets = planets_8828_nasa_all_kois[['kepid', 'kepoi_name', 'kepler_name', 'koi_disposition', 'koi_period', 'koi_period_err1', 'koi_period_err2', 'koi_eccen', 'koi_eccen_err1', 'koi_eccen_err2', 'koi_ror', 'koi_ror_err1', 'koi_ror_err2', 'koi_prad', 'koi_prad_err1', 'koi_prad_err2', 'koi_sma', 'koi_sma_err1', 'koi_sma_err2', 'koi_dor', 'koi_dor_err1', 'koi_dor_err2', 'koi_count', 'koi_steff', 'koi_steff_err1', 'koi_steff_err2', 'koi_smet', 'koi_smet_err1', 'koi_smet_err2', 'koi_srad', 'koi_srad_err1', 'koi_srad_err2', 'koi_smass', 'koi_smass_err1', 'koi_smass_err2', 'koi_sage', 'koi_sage_err1', 'koi_sage_err2']]
+
+interesting_planets_parameters = [
+    'kepid',
+    'kepoi_name',
+    'kepler_name',
+    'koi_disposition',
+    'koi_period', 'koi_period_err1', 'koi_period_err2',
+    'koi_eccen', 'koi_eccen_err1', 'koi_eccen_err2',
+    'koi_ror', 'koi_ror_err1', 'koi_ror_err2',
+    'koi_prad', 'koi_prad_err1', 'koi_prad_err2',
+    'koi_sma', 'koi_sma_err1', 'koi_sma_err2',
+    'koi_dor', 'koi_dor_err1', 'koi_dor_err2',
+    'koi_count',
+    'koi_steff', 'koi_steff_err1', 'koi_steff_err2',
+    'koi_smet', 'koi_smet_err1', 'koi_smet_err2',
+    'koi_srad', 'koi_srad_err1', 'koi_srad_err2',
+    'koi_smass', 'koi_smass_err1', 'koi_smass_err2',
+    'koi_sage', 'koi_sage_err1', 'koi_sage_err2'
+]
+
+planets = planets_8828_nasa_all_kois[interesting_planets_parameters]
 planets.rename(columns={
     'kepid': 'KIC',
 }, inplace=True)
@@ -49,13 +74,14 @@ planets.rename(columns={
 # remove false-positive planets
 planets = planets[planets.koi_disposition.isin(['CONFIRMED', 'CANDIDATE'])]
 # Add confirmed planets stars frequency
-stars['nasa_pl_freq'] = planets.groupby('KIC').size()
+# stars['nasa_pl_freq'] = planets.groupby('KIC').size()
 
 
 ###############################################################################
 #                   Compute Ages                                              #
 ###############################################################################
 # According to Color-index article in wikipedia (inverse from T(B-V))
+# This is the inverse of Ballesteros formula: http://arxiv.org/pdf/1201.1809.pdf
 def get_bmv(temperature):
     return (0.0217391*(230000-58*temperature+sqrt(52900000000+729*temperature**2)))/temperature
 
