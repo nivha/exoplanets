@@ -10,6 +10,28 @@ import pandas as pd
 from scipy.stats import ks_2samp
 from scipy.misc import comb
 import itertools
+from scipy import constants
+
+###############################################################################
+#           Physical conversions..                                            #
+###############################################################################
+
+def period2radius(period):
+    """
+    period in days. According to sun's mass
+    """
+    Msun = 1.989e30
+    Psec = period * (3600*24.0)
+    # G is in [m^3 * kg^-1 * s^-2]
+
+    a_meter = ((Psec**2 * constants.G * Msun) / (4 * constants.pi**2))**(1/3.0)
+    a_AU = a_meter / constants.au
+    return a_AU
+
+
+###############################################################################
+#           Data Analysis                                                     #
+###############################################################################
 
 
 def vector_dist(series, figsize=(5, 5), title=""):
@@ -22,7 +44,24 @@ def vector_dist(series, figsize=(5, 5), title=""):
     s = series.copy()
     s.sort()
     ax.plot(np.arange(s.size), s)
+    plt.grid()
     plt.title(title)
+
+
+def multivector_dist(serieses, figsize=(5, 5), title="", labels=None):
+    """
+    show a distribution plot for this series.
+    That is, the sorted series as a function of increasing integers
+    """
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+    for i, series in enumerate(serieses):
+        s = series.copy()
+        s.sort()
+        ax.plot(np.arange(s.size), s, label=labels[i])
+
+    plt.title(title)
+    plt.legend(loc=2)
 
 
 def age_bins_beautify(age_bins):
@@ -270,7 +309,7 @@ def plot_4_4_cdfs(df, param_name, teff_categories, age_categories, title='Somech
     axes1[-1].legend(loc='upper center', bbox_to_anchor=(-1.3, -0.05), fancybox=True, shadow=True, ncol=4)
     fig1.tight_layout()
     fig2.tight_layout()
-    return fig1
+    return fig1, fig2, fig3
 
 ###############################################################################
 #           Moving Window                                                     #
@@ -300,10 +339,6 @@ def roll_window_regardless_values(multiplicity_s, age_s, all_stars, window_size,
         all_stars_chunk = all_stars[(all_stars.Age >= age) & (all_stars.Age < max_margin)]
         all_stars_chunk_size = all_stars_chunk.shape[0]
 
-        mean_age = all_stars_chunk.Age.mean()
-        forward_win_mean = np.mean(forward_win)
-        forward_win_std = np.std(forward_win)
-        forward_win_sum = np.sum(forward_win)
         forward_win_size = forward_win.shape[0]
         backward_win_size = backward_win.shape[0]
         try:
@@ -312,14 +347,14 @@ def roll_window_regardless_values(multiplicity_s, age_s, all_stars, window_size,
             ks_2score = np.nan
 
         age_row = pd.Series({
-            'mean_age': mean_age,
+            'mean_age': all_stars_chunk.Age.mean(),
             'forward_win_size': forward_win_size,
             'backward_win_size': backward_win_size,
             'all_star_chunk_size': all_stars_chunk_size,
-            'mean': forward_win_mean,
-            'std': forward_win_std,
+            'mean': np.mean(forward_win),
+            'std': np.std(forward_win),
             'systems-freq': forward_win_size / float(all_stars_chunk_size),
-            'planets-freq': forward_win_sum / float(all_stars_chunk_size),
+            'planets-freq': np.sum(forward_win) / float(all_stars_chunk_size),
             'ks-score': ks_2score,
             })
         rows.append(age_row)
@@ -327,124 +362,134 @@ def roll_window_regardless_values(multiplicity_s, age_s, all_stars, window_size,
     return pd.concat(rows, axis=1).T
 
 
-def rollBy(what, basis, all_stars, window):
-    """
-    Compute rolling window statistics regarding the values in the given dataframe.
-    For each row in the dataframe we compute the window (backward and forward) and then
-    make the rest of the computations.
-    all_stars: dataframe of all the kepler stars
-    """
-    def applyToWindow(val):
-
-        min_margin = val-window
-        max_margin = val+window
-
-        # get the systems age-chunk
-        forward_win = what[(basis >= val) & (basis < max_margin)]
-        backward_win = what[(basis < val) & (basis >= min_margin)]
-
-        # normalize with the amount of stars found in this age-gap in the all-stars sample
-        all_stars_chunk = all_stars[(all_stars.Age >= val) & (all_stars.Age < max_margin)]
-        all_stars_chunk_size = all_stars_chunk.shape[0]
-
-        mean_age = all_stars_chunk.Age.mean()
-        forward_win_mean = np.mean(forward_win)
-        forward_win_std = np.std(forward_win)
-        forward_win_sum = np.sum(forward_win)
-        forward_win_size = forward_win.shape[0]
-        backward_win_size = backward_win.shape[0]
-        ks_2score = ks_2samp(forward_win, backward_win)
-
-        # print forward_win.value_counts(), backward_win.value_counts(), ks_2score
-        # print "="*40
-
-        return pd.Series({
-            'mean_age': mean_age,
-            'forward_win_size': forward_win_size,
-            'backward_win_size': backward_win_size,
-            'all_star_chunk_size': all_stars_chunk_size,
-            'mean': forward_win_mean,
-            'std': forward_win_std,
-            'systems-freq': forward_win_size / float(all_stars_chunk_size),
-            'planets-freq': forward_win_sum / float(all_stars_chunk_size),
-            'ks-score': ks_2score.pvalue,
-            })
-
-    return basis.apply(applyToWindow)
 
 
-def plot_moving_window(param, systems, all_stars, teff_categories, age_categories,
-                       age_window_size=1000, window_min_obs=30, figsize=(16, 4)):
 
 
-    fig0, axes0 = plt.subplots(nrows=1, ncols=4, sharex=True, sharey=True, figsize=figsize)
-    fig1, axes1 = plt.subplots(nrows=1, ncols=4, sharex=True, sharey=True, figsize=figsize)
-    fig2, axes2 = plt.subplots(nrows=1, ncols=4, sharex=True, sharey=True, figsize=figsize)
-    fig3, axes3 = plt.subplots(nrows=1, ncols=4, sharex=True, sharey=True, figsize=figsize)
-    fig4, axes4 = plt.subplots(nrows=1, ncols=4, sharex=True, sharey=True, figsize=figsize)
-    fig0.suptitle("windows size", size='xx-large', y=1.08)
-    fig1.suptitle("Multiplicity - Mean & Std", size='xx-large', y=1.08)
-    fig2.suptitle("KS test pvalue", size='xx-large', y=1.08)
-    fig3.suptitle("System Frequency", size='xx-large', y=1.08)
-    fig4.suptitle("Planets Frequency", size='xx-large', y=1.08)
-
-    min_age = 1e7
-    max_age = 0
-    for teff_bin in xrange(len(teff_categories)):
-        print teff_bin
-
-        # q is the relevant teff_bin, sorted by Age
-        q = systems[systems.teff_bins == teff_bin+1].sort('Age')
-        # now compute the relevant mean for this bin
-        param_col = getattr(q, param)
-
-        rolling_df = rollBy(param_col, q.Age, all_stars, age_window_size)
-
-        ax = axes0[teff_bin]
-        ax.set_title("{} K".format(teff_categories[teff_bin]))
-        rolling_df.plot('mean_age', 'forward_win_size', color='b', ax=ax, label='forward')
-        rolling_df.plot('mean_age', 'backward_win_size', color='r', ax=ax, label='backward')
-        ax.axhline(y=window_min_obs, color='g')
-
-        # filter values with small statistical significance (forward_win_size < window_min_obs)
-        rolling_df = rolling_df[rolling_df.forward_win_size >= window_min_obs]
-
-        # determine x-axis
-        if rolling_df.mean_age.max() > max_age:
-            max_age = rolling_df.mean_age.max()
-        if rolling_df.mean_age.min() < min_age:
-            min_age = rolling_df.mean_age.min()
-
-        ax = axes1[teff_bin]
-        ax.set_title("{} K".format(teff_categories[teff_bin]))
-        rolling_df.plot('mean_age', 'mean', color='b', ax=ax, label='mean')
-        rolling_df.plot('mean_age', 'std', color='g', ax=ax, label='std')
-
-        ax = axes2[teff_bin]
-        ax.set_title("{} K".format(teff_categories[teff_bin]))
-        df = rolling_df[(rolling_df.forward_win_size >= window_min_obs) & (rolling_df.backward_win_size >= window_min_obs)]
-        df.plot('mean_age', 'ks-score', color='b', ax=ax, logy=True)
-
-        ax = axes3[teff_bin]
-        ax.set_title("{} K".format(teff_categories[teff_bin]))
-        rolling_df.plot('mean_age', 'systems-freq', color='b', ax=ax)
-        ax.legend().set_visible(False)
-
-        ax = axes4[teff_bin]
-        ax.set_title("{} K".format(teff_categories[teff_bin]))
-        rolling_df.plot('mean_age', 'planets-freq', color='b', ax=ax)
-
-    for axes in [axes0, axes1, axes2, axes3, axes4]:
-        axes[0].set_xlim([min_age, max_age])
-        for ax in axes:
-            plt.setp(ax.get_yticklabels(), visible=True)
-            ax.set_xlabel("mean age [Myr]")
-
-    # fig1.savefig('multiplicity.png', bbox_inches='tight')
-    # fig2.savefig('ks-score p-value.png', bbox_inches='tight')
-    # fig3.savefig('systems-frequency.png', bbox_inches='tight')
-    # fig4.savefig('planets-frequency.png', bbox_inches='tight')
 
 
-def plot_radius_vd_period(p, teff_categories, age_categories, title='', figsize=(10, 10)):
-    pass
+
+
+
+# def rollBy(what, basis, all_stars, window):
+#     """
+#     Compute rolling window statistics regarding the values in the given dataframe.
+#     For each row in the dataframe we compute the window (backward and forward) and then
+#     make the rest of the computations.
+#     all_stars: dataframe of all the kepler stars
+#     """
+#     def applyToWindow(val):
+#
+#         min_margin = val-window
+#         max_margin = val+window
+#
+#         # get the systems age-chunk
+#         forward_win = what[(basis >= val) & (basis < max_margin)]
+#         backward_win = what[(basis < val) & (basis >= min_margin)]
+#
+#         # normalize with the amount of stars found in this age-gap in the all-stars sample
+#         all_stars_chunk = all_stars[(all_stars.Age >= val) & (all_stars.Age < max_margin)]
+#         all_stars_chunk_size = all_stars_chunk.shape[0]
+#
+#         mean_age = all_stars_chunk.Age.mean()
+#         forward_win_mean = np.mean(forward_win)
+#         forward_win_std = np.std(forward_win)
+#         forward_win_sum = np.sum(forward_win)
+#         forward_win_size = forward_win.shape[0]
+#         backward_win_size = backward_win.shape[0]
+#         ks_2score = ks_2samp(forward_win, backward_win)
+#
+#         # print forward_win.value_counts(), backward_win.value_counts(), ks_2score
+#         # print "="*40
+#
+#         return pd.Series({
+#             'mean_age': mean_age,
+#             'forward_win_size': forward_win_size,
+#             'backward_win_size': backward_win_size,
+#             'all_star_chunk_size': all_stars_chunk_size,
+#             'mean': forward_win_mean,
+#             'std': forward_win_std,
+#             'systems-freq': forward_win_size / float(all_stars_chunk_size),
+#             'planets-freq': forward_win_sum / float(all_stars_chunk_size),
+#             'ks-score': ks_2score.pvalue,
+#             })
+#
+#     return basis.apply(applyToWindow)
+#
+#
+# def plot_moving_window(param, systems, all_stars, teff_categories, age_categories,
+#                        age_window_size=1000, window_min_obs=30, figsize=(16, 4)):
+#
+#
+#     fig0, axes0 = plt.subplots(nrows=1, ncols=4, sharex=True, sharey=True, figsize=figsize)
+#     fig1, axes1 = plt.subplots(nrows=1, ncols=4, sharex=True, sharey=True, figsize=figsize)
+#     fig2, axes2 = plt.subplots(nrows=1, ncols=4, sharex=True, sharey=True, figsize=figsize)
+#     fig3, axes3 = plt.subplots(nrows=1, ncols=4, sharex=True, sharey=True, figsize=figsize)
+#     fig4, axes4 = plt.subplots(nrows=1, ncols=4, sharex=True, sharey=True, figsize=figsize)
+#     fig0.suptitle("windows size", size='xx-large', y=1.08)
+#     fig1.suptitle("Multiplicity - Mean & Std", size='xx-large', y=1.08)
+#     fig2.suptitle("KS test pvalue", size='xx-large', y=1.08)
+#     fig3.suptitle("System Frequency", size='xx-large', y=1.08)
+#     fig4.suptitle("Planets Frequency", size='xx-large', y=1.08)
+#
+#     min_age = 1e7
+#     max_age = 0
+#     for teff_bin in xrange(len(teff_categories)):
+#         print teff_bin
+#
+#         # q is the relevant teff_bin, sorted by Age
+#         q = systems[systems.teff_bins == teff_bin+1].sort('Age')
+#         # now compute the relevant mean for this bin
+#         param_col = getattr(q, param)
+#
+#         rolling_df = rollBy(param_col, q.Age, all_stars, age_window_size)
+#
+#         ax = axes0[teff_bin]
+#         ax.set_title("{} K".format(teff_categories[teff_bin]))
+#         rolling_df.plot('mean_age', 'forward_win_size', color='b', ax=ax, label='forward')
+#         rolling_df.plot('mean_age', 'backward_win_size', color='r', ax=ax, label='backward')
+#         ax.axhline(y=window_min_obs, color='g')
+#
+#         # filter values with small statistical significance (forward_win_size < window_min_obs)
+#         rolling_df = rolling_df[rolling_df.forward_win_size >= window_min_obs]
+#
+#         # determine x-axis
+#         if rolling_df.mean_age.max() > max_age:
+#             max_age = rolling_df.mean_age.max()
+#         if rolling_df.mean_age.min() < min_age:
+#             min_age = rolling_df.mean_age.min()
+#
+#         ax = axes1[teff_bin]
+#         ax.set_title("{} K".format(teff_categories[teff_bin]))
+#         rolling_df.plot('mean_age', 'mean', color='b', ax=ax, label='mean')
+#         rolling_df.plot('mean_age', 'std', color='g', ax=ax, label='std')
+#
+#         ax = axes2[teff_bin]
+#         ax.set_title("{} K".format(teff_categories[teff_bin]))
+#         df = rolling_df[(rolling_df.forward_win_size >= window_min_obs) & (rolling_df.backward_win_size >= window_min_obs)]
+#         df.plot('mean_age', 'ks-score', color='b', ax=ax, logy=True)
+#
+#         ax = axes3[teff_bin]
+#         ax.set_title("{} K".format(teff_categories[teff_bin]))
+#         rolling_df.plot('mean_age', 'systems-freq', color='b', ax=ax)
+#         ax.legend().set_visible(False)
+#
+#         ax = axes4[teff_bin]
+#         ax.set_title("{} K".format(teff_categories[teff_bin]))
+#         rolling_df.plot('mean_age', 'planets-freq', color='b', ax=ax)
+#
+#     for axes in [axes0, axes1, axes2, axes3, axes4]:
+#         axes[0].set_xlim([min_age, max_age])
+#         for ax in axes:
+#             plt.setp(ax.get_yticklabels(), visible=True)
+#             ax.set_xlabel("mean age [Myr]")
+#
+#     # fig1.savefig('multiplicity.png', bbox_inches='tight')
+#     # fig2.savefig('ks-score p-value.png', bbox_inches='tight')
+#     # fig3.savefig('systems-frequency.png', bbox_inches='tight')
+#     # fig4.savefig('planets-frequency.png', bbox_inches='tight')
+#     return fig1, fig2, fig3, fig4
+#
+#
+# def plot_radius_vd_period(p, teff_categories, age_categories, title='', figsize=(10, 10)):
+#     pass

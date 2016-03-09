@@ -7,7 +7,7 @@ from pylab import show
 import pylab as plt
 import re
 
-BASE_DIR = r"D:\Users\Mojo\Google Drive\project - astrophysics\raw_data"
+BASE_DIR = r"D:\Users\Mojo\Google Drive\Technion\project - astrophysics\raw_data"
 ###############################################################################
 #                   Stars Table                                               #
 ###############################################################################
@@ -44,8 +44,10 @@ stars = stars.combine_first(df)
 ##################################
 # read 8828 KOI
 # source: http://exoplanetarchive.ipac.caltech.edu/cgi-bin/TblView/nph-tblView?app=ExoTbls&config=cumulative
-planets_8828_nasa_all_kois_path = os.path.join(BASE_DIR, "planets_nasa_all_kois_8826.xlsx")
-planets_8828_nasa_all_kois = pd.read_excel(planets_8828_nasa_all_kois_path, skiprows=range(155))
+# rows2skip is the number of lines just before the headline
+rows2skip = 155  # used to be 155 in the old file
+planets_8828_nasa_all_kois_path = os.path.join(BASE_DIR, "planets_nasa_all_kois_8826.csv")
+planets_8828_nasa_all_kois = pd.read_csv(planets_8828_nasa_all_kois_path, skiprows=range(rows2skip))
 
 interesting_planets_parameters = [
     'kepid',
